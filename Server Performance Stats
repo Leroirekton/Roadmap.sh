@@ -1,0 +1,21 @@
+#!/bin/bash
+
+# A script to analyze basic server performance stats.
+
+# Function to get Total CPU Usage
+get_cpu_usage() {
+    # Uses top to get CPU stats and awk to parse and calculate idle time
+    # The total used CPU is 100% minus the idle percentage.
+    local cpu_idle
+    cpu_idle=\$(top -bn1 | grep "Cpu(s)" | sed "s/.*, *$$[0-9.]*$$%* id.*/\1/" | awk '{print \$1}')
+    local cpu_used
+    cpu_used=\$(echo "100 - \$cpu_idle" | bc)
+    echo "Total CPU Usage: \${cpu_used}%"
+}
+
+# Function to get Total Memory Usage
+get_memory_usage() {
+    # Uses the 'free' command and awk to parse memory statistics
+    # NR==2 selects the 'Mem:' line. It calculates used and free percentages.
+    echo "Total Memory Usage:"
+    free -h
