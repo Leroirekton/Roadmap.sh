@@ -1,3 +1,5 @@
+https://roadmap.sh/projects/server-stats
+
 # Server Stats Analyzer
 
 A simple Bash script to analyze and report basic server performance statistics. This script can be run on any Linux server to provide a quick overview of its health and resource utilization.
