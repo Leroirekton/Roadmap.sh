@@ -1,0 +1,97 @@
+#!/bin/bash
+
+# A tool to archive logs from a specified directory by compressing them
+# into a timestamped tar.gz file and storing them in an archive directory.
+
+# --- Configuration ---
+# Directory where archives will be stored. Can be overridden by an environment variable.
+ARCHIVE_BASE_DIR="${ARCHIVE_DIR:-/var/log-archives}"
+# File to log the history of archive operations.
+LOG_FILE="$ARCHIVE_BASE_DIR/archive.log"
+
+# --- Functions ---
+
+# Function to print usage instructions and exit
+usage() {
+    echo "Usage: $0 <log-directory>"
+    echo "Example: $0 /var/log/myapp"
+    exit 1
+}
+
+# Function to log messages with a timestamp
+log_message() {
+    local message="$1"
+    # Ensure the log directory exists before writing
+    mkdir -p "$(dirname "$LOG_FILE")"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $message" >> "$LOG_FILE"
+}
+
+# --- Main Script Logic ---
+
+# 1. Check for root privileges, as it's often needed to access /var/log
+if [[ $EUID -ne 0 ]]; then
+   echo "This script must be run as root to access log directories like /var/log." 
+   exit 1
+fi
+
+# 2. Check if a directory argument was provided
+if [ -z "$1" ]; then
+    echo "Error: No log directory specified."
+    usage
+fi
+
+LOG_SOURCE_DIR="$1"
+
+# 3. Validate the source directory
+if [ ! -d "$LOG_SOURCE_DIR" ]; then
+    echo "Error: Directory '$LOG_SOURCE_DIR' does not exist."
+    exit 1
+fi
+
+if [ ! -r "$LOG_SOURCE_DIR" ]; then
+    echo "Error: Directory '$LOG_SOURCE_DIR' is not readable."
+    exit 1
+fi
+
+# Check if the directory is empty
+if [ -z "$(ls -A "$LOG_SOURCE_DIR")" ]; then
+    echo "Info: Directory '$LOG_SOURCE_DIR' is empty. Nothing to archive."
+    exit 0
+fi
+
+# 4. Prepare for archiving
+echo "Starting archive process for directory: $LOG_SOURCE_DIR"
+
+# Create the main archive directory if it doesn't exist
+mkdir -p "$ARCHIVE_BASE_DIR"
+
+# Generate a unique, timestamped filename for the archive
+TIMESTAMP=$(date '+%Y%m%d_%H%M%S')
+ARCHIVE_FILENAME="logs_archive_${TIMESTAMP}.tar.gz"
+ARCHIVE_PATH="$ARCHIVE_BASE_DIR/$ARCHIVE_FILENAME"
+
+# 5. Create the archive
+echo "Compressing logs to $ARCHIVE_PATH..."
+# Use tar to create a gzipped archive. The 'C' changes directory before archiving.
+tar -czf "$ARCHIVE_PATH" -C "$(dirname "$LOG_SOURCE_DIR")" "$(basename "$LOG_SOURCE_DIR")"
+
+# 6. Verify the archive was created successfully
+if [ $? -eq 0 ] && [ -f "$ARCHIVE_PATH" ]; then
+    echo "Archive created successfully: $ARCHIVE_PATH"
+    
+    # 7. Log the operation
+    log_message "Successfully archived '$LOG_SOURCE_DIR' to '$ARCHIVE_PATH'. Size: $(du -h "$ARCHIVE_PATH" | cut -f1)."
+    
+    # 8. (Optional but recommended) Clean up the original logs
+    # Uncomment the following lines to automatically remove the source logs after archiving.
+    # echo "Cleaning up original log directory: $LOG_SOURCE_DIR"
+    # rm -rf "$LOG_SOURCE_DIR"/*
+    # log_message "Cleaned up original logs in '$LOG_SOURCE_DIR'."
+
+else
+    echo "Error: Failed to create the archive."
+    log_message "Failed to archive '$LOG_SOURCE_DIR'."
+    exit 1
+fi
+
+echo "Archive process complete."
